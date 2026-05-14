@@ -3,7 +3,7 @@ REM ================================================================
 REM Focus Tracker — one-click .exe builder
 REM Run this once. Put it in the same folder as focus_tracker.py.
 REM It will:
-REM   1. Install PyInstaller (if missing).
+REM   1. Install app dependencies and PyInstaller (if missing).
 REM   2. Build FocusTracker.exe (single file, no console).
 REM   3. Drop a "Focus Tracker" shortcut on your Desktop.
 REM
@@ -35,6 +35,15 @@ if not defined PY (
     exit /b 1
 )
 
+REM --- Install dependencies ----------------------------------------
+echo Installing / updating app dependencies...
+%PY% -m pip install --user --upgrade -r "%HERE%requirements.txt"
+if errorlevel 1 (
+    echo Failed to install app dependencies. See messages above.
+    pause
+    exit /b 1
+)
+
 REM --- Make sure pyinstaller is available --------------------------
 echo Installing / updating PyInstaller...
 %PY% -m pip install --user --upgrade pyinstaller
@@ -47,10 +56,14 @@ if errorlevel 1 (
 REM --- Build ------------------------------------------------------
 echo.
 echo Building FocusTracker.exe (this takes 30-90 seconds)...
+set "ICON_ARG="
+if exist "%HERE%app_icon.ico" set "ICON_ARG=--icon=%HERE%app_icon.ico"
+
 %PY% -m PyInstaller ^
     --onefile ^
     --windowed ^
     --name FocusTracker ^
+    %ICON_ARG% ^
     --distpath "%HERE%dist" ^
     --workpath "%HERE%build" ^
     --specpath "%HERE%" ^
@@ -86,6 +99,6 @@ echo =====================================================
 echo  Done.
 echo  App:      %HERE%FocusTracker.exe
 echo  Shortcut: Focus Tracker  (on your Desktop)
-echo  Data:     %HERE%focus_tracker_data.json
+echo  Data:     %HERE%momentum.sqlite3
 echo =====================================================
 pause

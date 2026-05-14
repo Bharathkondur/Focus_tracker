@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 *.pyo
 focus_tracker_data.json
+daily_focus.json
+momentum.sqlite3*
 build/
 dist/
 *.spec
