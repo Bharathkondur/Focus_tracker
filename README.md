@@ -4,6 +4,12 @@ Momentum is a local-first Windows desktop app for daily planning, recurring habi
 
 The app has no account system, sync, telemetry, or runtime network dependency. Your data stays in the app folder on this machine.
 
+## Screenshots
+
+![Momentum goals dashboard](screenshots/momentum-goals.png)
+
+![Momentum reflection and insights](screenshots/momentum-insights.png)
+
 ## Features
 
 - Recurring goals for habits you want to track over time.
