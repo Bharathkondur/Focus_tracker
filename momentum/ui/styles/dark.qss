@@ -8,6 +8,12 @@ QWidget {
     background: #0A0F1A;
 }
 
+QWidget#ComposerPage {
+    background: transparent;
+    min-width: 700px;
+    max-width: 940px;
+}
+
 QLabel {
     background: transparent;
 }
@@ -22,6 +28,86 @@ QFrame#Sidebar {
     border-right: 1px solid #162235;
 }
 
+QListWidget#LibraryList {
+    background: transparent;
+    border: none;
+    padding: 2px 0;
+    margin: 0;
+}
+
+QListWidget#LibraryList::item {
+    background: #0B1220;
+    border: 1px solid #182337;
+    border-radius: 12px;
+    padding: 6px 6px;
+    margin: 4px 0;
+}
+
+QListWidget#LibraryList::item:selected {
+    background: #12223A;
+    border: 1px solid #2F8C69;
+}
+
+QListWidget#LibraryList::item:hover {
+    background: #111E31;
+    border-color: #263449;
+}
+
+QFrame#LibraryRow {
+    background: transparent;
+    border: none;
+}
+
+QPushButton#LibraryOpen {
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    padding: 8px 8px;
+    text-align: left;
+}
+
+QPushButton#LibraryOpen:hover {
+    background: #111E31;
+}
+
+QPushButton#MoreButton {
+    background: transparent;
+    color: #94A3B8;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 8px 0;
+    font-size: 16px;
+    font-weight: 800;
+}
+
+QPushButton#MoreButton:hover {
+    background: #111E31;
+    border-color: #263449;
+    color: #F8FAFC;
+}
+
+QPushButton#Danger {
+    background: transparent;
+    color: #FCA5A5;
+    border: 1px solid #3B1F2A;
+    border-radius: 10px;
+    padding: 8px 9px;
+}
+
+QPushButton#Danger:hover {
+    background: #3B1F2A;
+    border-color: #7F1D1D;
+}
+
+QLabel#LibraryHeader {
+    color: #C7D2FE;
+    background: transparent;
+    padding: 12px 4px 4px 4px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
 QFrame#Card,
 QFrame#MetricCard,
 QFrame#GoalCard,
@@ -31,6 +117,34 @@ QFrame#InsightCard {
     background: #101826;
     border: 1px solid #1D2A3F;
     border-radius: 18px;
+}
+
+QFrame#Panel {
+    background: #0B1220;
+    border: 1px solid #1D2A3F;
+    border-radius: 12px;
+}
+
+QFrame#ActionBar {
+    background: #0B1220;
+    border: 1px solid #1D2A3F;
+    border-radius: 16px;
+}
+
+QFrame#TimelineRow {
+    background: #0B1220;
+    border: 1px solid #182337;
+    border-radius: 12px;
+}
+
+QLabel#Chip {
+    background: #162235;
+    color: #C7D2FE;
+    border: 1px solid #263449;
+    border-radius: 10px;
+    padding: 6px 8px;
+    font-size: 12px;
+    font-weight: 700;
 }
 
 QFrame#GoalCard:hover,
@@ -85,6 +199,35 @@ QTextEdit {
 QLineEdit:focus,
 QTextEdit:focus {
     border: 1px solid #2F8C69;
+}
+
+QTextEdit#Composer {
+    background: #0B1220;
+    border: 1px solid #263449;
+    border-radius: 24px;
+    padding: 20px 22px;
+    font-size: 18px;
+    selection-background-color: #065F46;
+}
+
+QTextEdit#Composer:focus {
+    background: #0F1724;
+    border: 1px solid #34D399;
+}
+
+QTextEdit#NotebookEditor {
+    background: #08111F;
+    border: 1px solid #1D2A3F;
+    border-radius: 14px;
+    padding: 18px 18px;
+    font-size: 16px;
+    min-height: 220px;
+    selection-background-color: #065F46;
+}
+
+QTextEdit#NotebookEditor:focus {
+    background: #0A1526;
+    border: 1px solid #34D399;
 }
 
 QPushButton {

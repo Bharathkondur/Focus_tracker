@@ -1,0 +1,3 @@
+onnx>=1.19
+onnxscript>=0.7
+onnxruntime>=1.23

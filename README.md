@@ -1,8 +1,10 @@
 # Momentum
 
-Momentum is a local-first Windows desktop app for daily planning, recurring habits, and quiet consistency tracking. It keeps the original Focus Tracker launchers, but the current app lives in the `momentum` package and uses a PySide6 interface with SQLite storage.
+Momentum is a local-first Windows desktop app for capturing notes, tasks, and goals from one simple writing box.
 
-The app has no account system, sync, telemetry, or runtime network dependency. Your data stays in the app folder on this machine.
+The current direction is the Momentum Capture experience: type a sentence, press Enter, and the app routes it into the right place using deterministic rules plus a small local intent model. It is designed to feel closer to a smart notebook than a heavy project management tool.
+
+There is no account system, cloud sync, telemetry, or runtime network dependency. App data stays on the machine in SQLite and local Markdown files.
 
 ## Screenshots
 
@@ -12,27 +14,28 @@ The app has no account system, sync, telemetry, or runtime network dependency. Y
 
 ## Features
 
-- Recurring goals for habits you want to track over time.
-- Daily tasks for one-off work, with optional `HH:MM` planned times.
-- Carry-forward support for unfinished tasks.
-- Goal and task notes through right-click menus.
-- Mark goals or tasks as done, skipped, or archived.
-- Per-goal 21-day consistency maps.
-- Sidebar yearly consistency heatmap with day selection.
-- Vacation-day marking from the heatmap context menu.
-- Daily reflection with mood, energy, short reflection, and longer notes.
-- Insight cards for weekly consistency, strongest habit, weakest habit, best weekday, and monthly trend.
+- One-line capture for notes, tasks, and goals.
+- Local three-class routing: `task`, `goal`, and `note`.
+- Explicit prefixes such as `task:`, `goal:`, and `note:` always win.
+- Deterministic date and time parsing for scheduled tasks.
+- Daily notebook with autosave, pinning, search, and tags.
+- Sidebar library for previous notes, tasks, goals, projects, reports, and trash.
+- Safe delete flow with restore support from Trash.
+- Light and dark themes.
+- Local summaries for 7 days, 1 month, 1 year, or custom date ranges.
+- Recurring goals, daily tasks, reflection, insights, and consistency maps from the original Focus Tracker workflow.
 - Local SQLite database stored as `momentum.sqlite3`.
-- One-time migration from `daily_focus.json` when the SQLite database is empty.
+- Dated Markdown capture exports under `momentum_captures/YYYY/MM-Month/DD/`.
+- Real usage correction capture so routing mistakes can improve future training.
 
 ## Tech Stack
 
 - Python
 - PySide6
 - SQLite
-- Custom Qt widgets
-- QSS dark theme
-- PyInstaller for the standalone executable
+- PyTorch and `tokenizers` for optional local model inference
+- Custom Qt widgets and QSS themes
+- PyInstaller build scripts for local executable builds
 
 ## Project Structure
 
@@ -40,51 +43,122 @@ The app has no account system, sync, telemetry, or runtime network dependency. Y
 momentum/
   core/       domain models, date helpers, analytics
   data/       SQLite schema, repository, paths, legacy migration
+  capture/    parser, router, memory, local model wrapper, summaries
   state/      Qt signal-based application store
   ui/         main window, sidebar, views, widgets, theme
 
+experiments/
+  three_class/        production three-class model scripts
+  distillation/       teacher-student experiments
+  distillation_v2/    BPE distilled student experiments
+  modernbert/         ModernBERT teacher experiment
+
+training/             dataset export, training, and prediction scripts
+
 focus_tracker.py      source launcher
 FocusTracker.pyw      windowed launcher
+momentum_capture.py   Momentum Capture launcher
+MomentumCapture.pyw   windowed Momentum Capture launcher
 Build_Exe.bat         Windows executable builder
-FocusTracker.exe      standalone Windows build
+Build_Capture_Exe.bat Momentum Capture executable builder
 ```
-
-## Run The Standalone App
-
-Download or open `FocusTracker.exe`, then double-click it.
-
-Momentum creates and updates `momentum.sqlite3` next to the executable. Keep that file if you want to preserve your data when moving the app folder.
 
 ## Run From Source
 
 ```bash
 python -m pip install -r requirements.txt
+python momentum_capture.py
+```
+
+On Windows, the windowed launcher is:
+
+```bash
+python MomentumCapture.pyw
+```
+
+The original Focus Tracker window is still available:
+
+```bash
 python focus_tracker.py
 ```
 
-On Windows, you can also run the windowed launcher:
+## Build A Local Exe
 
-```bash
-python FocusTracker.pyw
+```powershell
+.\Build_Capture_Exe.bat
 ```
 
-## Build The Exe
+For the original Focus Tracker executable:
 
-Run the build script from the repository folder:
-
-```bash
-Build_Exe.bat
+```powershell
+.\Build_Exe.bat
 ```
 
-The script installs the app dependencies and PyInstaller for the current user, builds a single-file `FocusTracker.exe`, and creates a desktop shortcut named `Focus Tracker`.
+Generated executables and build folders are local artifacts and are not required for source development.
+
+## Capture Examples
+
+```text
+goal: exercise daily
+tomorrow 09:30 finish portfolio review
+note: felt focused after the morning session
+roadmap for improving the job search
+linkedin every day
+capgemini interview felt rough
+```
+
+Momentum uses the app context to route each entry:
+
+- a dated action becomes a task
+- a recurring habit becomes a goal
+- observations, reflections, ideas, and plans become notes
+
+## Local AI Architecture
+
+Momentum does not need a cloud LLM for routing. The production architecture is layered:
+
+```text
+1. Explicit prefix rules
+2. Date and time parser
+3. Local memory and correction lookup
+4. Three-class local encoder model
+5. Tiny fallback classifier
+6. Confidence-based save or review
+```
+
+The app currently uses three destinations: `task`, `goal`, and `note`. The earlier `plan` class was removed because it overlapped too much with notes in real usage.
+
+Training and architecture details are documented in [AI_ARCHITECTURE.md](AI_ARCHITECTURE.md).
+
+## Training Workflow
+
+Model checkpoints and datasets are intentionally not committed to GitHub. Keep them local.
+
+Useful commands:
+
+```powershell
+py -3.11 training\export_real_usage_dataset.py --output training_data\real_usage\momentum_real_usage.jsonl
+py -3.11 experiments\three_class\build_real_usage_cache.py --usage training_data\real_usage\momentum_real_usage.jsonl --output experiments\three_class\cache\three_class_with_real_usage.jsonl
+py -3.11 experiments\three_class\train_three_class.py --cache experiments\three_class\cache\three_class_with_real_usage.jsonl --device cuda
+```
+
+Optional ONNX export:
+
+```powershell
+py -3.11 experiments\three_class\export_onnx.py --checkpoint-dir experiments\three_class\latest --output experiments\three_class\latest\model.onnx --opset 18
+```
 
 ## Data And Privacy
 
-Momentum stores all app data locally in `momentum.sqlite3`. Local data files and generated build artifacts are ignored by Git where appropriate:
+Momentum stores app data locally. These files are ignored by Git:
 
 - `momentum.sqlite3*`
 - `daily_focus.json`
 - `focus_tracker_data.json`
+- `momentum_captures/`
+- `models/`
+- `training_data/`
+- model exports such as `*.pt`, `*.onnx`, `*.safetensors`, and `*.bin`
 - `build/`
 - `dist/`
 - `__pycache__/`
@@ -93,4 +167,9 @@ If `daily_focus.json` exists and `momentum.sqlite3` has no goals yet, Momentum i
 
 ## Development Notes
 
-Use `requirements.txt` for runtime dependencies. The main application entry point is `momentum.main:main`, and both `focus_tracker.py` and `FocusTracker.pyw` delegate to it.
+Use `requirements.txt` for runtime dependencies.
+
+- Momentum Capture entry point: `momentum.capture_main:main`
+- Original Focus Tracker entry point: `momentum.main:main`
+- Training documentation: `training/README.md`
+- AI architecture notes: `AI_ARCHITECTURE.md`
