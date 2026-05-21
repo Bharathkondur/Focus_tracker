@@ -48,11 +48,17 @@ class AsyncIntentPredictor(QObject):
         self.model = model
         self.pool = QThreadPool.globalInstance()
         self._request_id = 0
+        self._workers: dict[int, _PredictionWorker] = {}
 
     def predict(self, text: str) -> int:
         self._request_id += 1
         request_id = self._request_id
         worker = _PredictionWorker(self.model, request_id, text)
-        worker.signals.finished.connect(self.finished.emit)
+        self._workers[request_id] = worker
+        worker.signals.finished.connect(self._finish)
         self.pool.start(worker)
         return request_id
+
+    def _finish(self, result: AsyncIntentResult) -> None:
+        self._workers.pop(result.request_id, None)
+        self.finished.emit(result)
