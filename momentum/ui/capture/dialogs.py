@@ -50,24 +50,30 @@ class CommandPalette(QDialog):
         self.accept()
 
 
-class SupportSettingsDialog(QDialog):
+class SettingsDialog(QDialog):
     def __init__(self, window):
         super().__init__(window)
         self.window = window
-        self.setWindowTitle("Support Settings")
+        self.setWindowTitle("Settings")
         self.setMinimumWidth(440)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(10)
 
-        title = QLabel("Support Settings")
+        title = QLabel("Settings")
         title.setObjectName("SectionTitle")
         layout.addWidget(title)
 
-        detail = QLabel("Create local backups, exports, and support bundles without sending anything online.")
+        detail = QLabel("Theme, backups, exports, and local support tools.")
         detail.setObjectName("Muted")
         detail.setWordWrap(True)
         layout.addWidget(detail)
+
+        self.theme_button = QPushButton("")
+        _accessible(self.theme_button, "Toggle theme")
+        self.theme_button.clicked.connect(self._toggle_theme)
+        layout.addWidget(self.theme_button)
+        self._refresh_theme_button()
 
         actions = [
             ("Create Backup", window.create_database_backup),
@@ -88,3 +94,52 @@ class SupportSettingsDialog(QDialog):
 
     def _run(self, action) -> None:
         action()
+
+    def _toggle_theme(self) -> None:
+        self.window.toggle_theme()
+        self._refresh_theme_button()
+
+    def _refresh_theme_button(self) -> None:
+        target = "Light" if self.window.theme_mode == "dark" else "Dark"
+        self.theme_button.setText(f"Switch to {target} Mode")
+
+
+class OnboardingDialog(QDialog):
+    def __init__(self, window):
+        super().__init__(window)
+        self.window = window
+        self.setWindowTitle("Welcome to Momentum Capture")
+        self.setMinimumWidth(500)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        title = QLabel("Momentum Capture")
+        title.setObjectName("SectionTitle")
+        layout.addWidget(title)
+
+        detail = QLabel(
+            "Write one line and press Enter. Momentum routes it as a task, goal, or note locally on this machine."
+        )
+        detail.setObjectName("Muted")
+        detail.setWordWrap(True)
+        layout.addWidget(detail)
+
+        examples = QLabel("Examples:\n- tomorrow 09:30 apply to capgemini\n- goal: exercise daily\n- note: interview felt rough")
+        examples.setObjectName("Caption")
+        examples.setWordWrap(True)
+        layout.addWidget(examples)
+
+        settings = QPushButton("Open Settings")
+        _accessible(settings, "Open settings")
+        settings.clicked.connect(self._settings)
+        layout.addWidget(settings)
+
+        start = QPushButton("Start Capturing")
+        start.setObjectName("Primary")
+        _accessible(start, "Start capturing")
+        start.clicked.connect(self.accept)
+        layout.addWidget(start)
+
+    def _settings(self) -> None:
+        SettingsDialog(self.window).exec()

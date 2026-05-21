@@ -5,7 +5,7 @@ import webbrowser
 from datetime import date, timedelta
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -38,7 +38,7 @@ from momentum.ui.capture.cards import (
     TimelineCard,
     WorkspaceCard,
 )
-from momentum.ui.capture.dialogs import CommandPalette, SupportSettingsDialog
+from momentum.ui.capture.dialogs import CommandPalette, OnboardingDialog, SettingsDialog
 from momentum.ui.capture.editor import LibraryEditorCard
 from momentum.ui.capture.sidebar import LibrarySidebar
 from momentum.ui.capture.utils import (
@@ -178,6 +178,8 @@ class CaptureWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+F"), self).activated.connect(self.focus_search)
         QShortcut(QKeySequence("Ctrl+S"), self).activated.connect(self.notebook.save_current)
         QShortcut(QKeySequence("Ctrl+K"), self).activated.connect(self.open_command_palette)
+        QShortcut(QKeySequence("Ctrl+,"), self).activated.connect(self.open_support_settings)
+        QTimer.singleShot(350, self.show_onboarding_if_needed)
 
     def set_kind(self, kind: str) -> None:
         self.forced_kind = kind
@@ -453,7 +455,14 @@ class CaptureWindow(QMainWindow):
         CommandPalette(self).exec()
 
     def open_support_settings(self) -> None:
-        SupportSettingsDialog(self).exec()
+        SettingsDialog(self).exec()
+
+    def show_onboarding_if_needed(self) -> None:
+        if self.repo.setting("capture_onboarding_seen"):
+            return
+        dialog = OnboardingDialog(self)
+        dialog.exec()
+        self.repo.set_setting("capture_onboarding_seen", "1")
 
     def toggle_theme(self) -> None:
         self.apply_theme("light" if self.theme_mode == "dark" else "dark")
