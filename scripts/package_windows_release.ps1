@@ -35,7 +35,6 @@ if (-not $SkipBuild) {
     Copy-Item -LiteralPath "$repoRoot\dist\MomentumCapture.exe" -Destination "$repoRoot\MomentumCapture.exe" -Force
     Remove-Item -LiteralPath "$repoRoot\dist" -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath "$repoRoot\build" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath "$repoRoot\MomentumCapture.spec" -Force -ErrorAction SilentlyContinue
 }
 
 $exe = Join-Path $repoRoot "MomentumCapture.exe"
