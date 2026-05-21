@@ -24,7 +24,6 @@ Screenshot *.png
 *.npz
 *.npy
 MomentumCapture.exe
-MomentumCapture.spec
 experiments/modernbert/runs/
 experiments/modernbert/latest/
 experiments/modernbert/logs/
@@ -42,4 +41,3 @@ experiments/three_class/latest/
 experiments/three_class/logs/
 build/
 dist/
-*.spec
