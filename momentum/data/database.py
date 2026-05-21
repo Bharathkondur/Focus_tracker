@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import shutil
 import logging
@@ -180,6 +180,7 @@ class Database:
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.execute("PRAGMA synchronous = NORMAL")
         self.migrate()
+        self._backup_on_startup_if_stale()
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -247,6 +248,28 @@ class Database:
             """,
             (version,),
         )
+
+    def _backup_on_startup_if_stale(self) -> None:
+        key = "last_startup_backup_at"
+        row = self._conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        now = datetime.now()
+        last_backup = None
+        if row:
+            try:
+                last_backup = datetime.fromisoformat(row["value"])
+            except ValueError:
+                logger.exception("Invalid startup backup timestamp in settings")
+        if last_backup is not None and now - last_backup < timedelta(hours=24):
+            return
+        self.backup()
+        self._conn.execute(
+            """
+            INSERT INTO settings (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """,
+            (key, now.isoformat(timespec="seconds")),
+        )
+        self._conn.commit()
 
     def _ensure_capture_search(self) -> None:
         try:

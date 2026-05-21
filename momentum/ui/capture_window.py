@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import webbrowser
-from datetime import date
+from datetime import date, timedelta
 from dataclasses import dataclass
 
 from PySide6.QtCore import Qt
@@ -29,6 +29,7 @@ from momentum.data.safety import create_backup, create_support_bundle, export_sq
 from momentum.state.store import AppStore
 from momentum.ui.theme import load_stylesheet
 from momentum.ui.capture.accessibility import _accessible
+from momentum.ui.capture.async_model import AsyncIntentPredictor, AsyncIntentResult
 from momentum.ui.capture.cards import (
     CaptureCard,
     EngineeringCard,
@@ -72,9 +73,14 @@ class CaptureWindow(QMainWindow):
         self.repo: Repository = store.repo
         self.memory = CaptureMemory(self.repo.conn)
         self.router = ContextRouter(self.memory)
+        self.async_predictor = AsyncIntentPredictor(self.router.local_model)
+        self.async_predictor.finished.connect(self._handle_model_prediction)
         self.forced_kind = "auto"
         self.last_route: RoutedCapture | None = None
         self.last_save: LastSave | None = None
+        self._model_request_id = 0
+        self._model_prediction_text = ""
+        self._model_prediction = None
         self.focus_mode = False
         self.theme_mode = self.repo.setting("theme", "dark") or "dark"
 
@@ -179,25 +185,23 @@ class CaptureWindow(QMainWindow):
         self.update_preview()
 
     def update_preview(self) -> None:
-        route = self._route()
+        route = self._route(allow_model=False)
         self.last_route = route
         if route is None:
             self.preview.setText("Ready.")
             self.capture.set_prediction("", "")
+            self._model_prediction_text = ""
+            self._model_prediction = None
             return
-        intent = route.intent
-        self.capture.set_prediction(intent.kind, self._date_chip(intent))
-        if route.needs_confirmation:
-            self.preview.setText("Choose the right destination before saving.")
-        else:
-            self.preview.setText(self._date_chip(intent))
+        self._show_route(route)
+        self._queue_model_prediction(route)
 
     def submit(self) -> None:
         raw_value = self.capture.input.text()
         auto_route = None
         if self.forced_kind != "auto":
-            auto_route = self.router.route(raw_value, today(), "auto")
-        route = self._route()
+            auto_route = self._route_for(raw_value, "auto")
+        route = self._route_for(raw_value, self.forced_kind)
         if route is None:
             return
         intent = route.intent
@@ -268,8 +272,68 @@ class CaptureWindow(QMainWindow):
         self.workspace.refresh()
         self.summary.refresh()
 
-    def _route(self) -> RoutedCapture | None:
-        return self.router.route(self.capture.input.text(), today(), self.forced_kind)
+    def _route(
+        self,
+        *,
+        allow_model: bool = False,
+        model_prediction=None,
+    ) -> RoutedCapture | None:
+        return self._route_for(
+            self.capture.input.text(),
+            self.forced_kind,
+            allow_model=allow_model,
+            model_prediction=model_prediction,
+        )
+
+    def _route_for(
+        self,
+        value: str,
+        forced_kind: str,
+        *,
+        allow_model: bool = False,
+        model_prediction=None,
+    ) -> RoutedCapture | None:
+        prediction = model_prediction
+        if prediction is None and self._model_prediction_text == value:
+            prediction = self._model_prediction
+        return self.router.route(
+            value,
+            today(),
+            forced_kind,
+            allow_model=allow_model,
+            model_prediction=prediction,
+        )
+
+    def _show_route(self, route: RoutedCapture) -> None:
+        intent = route.intent
+        self.capture.set_prediction(intent.kind, self._date_chip(intent))
+        if route.needs_confirmation:
+            self.preview.setText("Choose the right destination before saving.")
+        else:
+            self.preview.setText(self._date_chip(intent))
+
+    def _queue_model_prediction(self, route: RoutedCapture) -> None:
+        raw = self.capture.input.text()
+        if self.forced_kind != "auto" or not raw.strip() or route.source == "explicit_prefix":
+            return
+        if self._model_prediction_text == raw and self._model_prediction is not None:
+            return
+        self._model_prediction_text = raw
+        self._model_prediction = None
+        self._model_request_id = self.async_predictor.predict(route.intent.text)
+
+    def _handle_model_prediction(self, result: AsyncIntentResult) -> None:
+        raw = self.capture.input.text()
+        if result.request_id != self._model_request_id or raw != self._model_prediction_text:
+            return
+        self._model_prediction = result.prediction
+        if result.prediction is None or self.forced_kind != "auto":
+            return
+        route = self._route(allow_model=False, model_prediction=result.prediction)
+        if route is None:
+            return
+        self.last_route = route
+        self._show_route(route)
 
     def undo_last_save(self) -> None:
         if self.last_save is None:

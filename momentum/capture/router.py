@@ -6,7 +6,7 @@ from datetime import date
 
 from momentum.capture.classifier import TinyIntentClassifier
 from momentum.capture.intent import CaptureIntent, parse_capture
-from momentum.capture.local_model import LocalIntentModel
+from momentum.capture.local_model import LocalIntentModel, ModelPrediction
 from momentum.capture.memory import CaptureMemory, MemoryItem
 from momentum.core.dates import today
 
@@ -62,6 +62,9 @@ class ContextRouter:
         value: str,
         base_day: date | None = None,
         forced_kind: str = "auto",
+        *,
+        allow_model: bool = True,
+        model_prediction: ModelPrediction | None = None,
     ) -> RoutedCapture | None:
         base = base_day or today()
         intent = parse_capture(value, base)
@@ -78,7 +81,8 @@ class ContextRouter:
 
         rule_kind, rule_confidence = self._rule_score(intent, value, base)
         memory_kind, memory_confidence = self._memory_score(context)
-        model_prediction = self.local_model.predict(intent.text)
+        if model_prediction is None and allow_model:
+            model_prediction = self.local_model.predict(intent.text)
         model_kind, model_confidence = self._model_score(model_prediction)
         classifier_kind, classifier_confidence = self._tiny_classifier().predict(intent.text)
 
