@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
+import logging
 from sqlite3 import Connection, OperationalError
 
 from momentum.capture.intent import CaptureIntent
 from momentum.core.dates import date_key, parse_day, today
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -76,6 +80,7 @@ class CaptureMemory:
             try:
                 self.conn.execute("DELETE FROM capture_fts WHERE rowid = ?", (event_id,))
             except OperationalError:
+                logger.exception("Failed to delete capture %s from FTS index", event_id)
                 pass
         self.conn.execute("DELETE FROM capture_events WHERE id = ?", (event_id,))
         self.conn.commit()
@@ -162,6 +167,15 @@ class CaptureMemory:
         examples.extend((row["clean_text"], row["kind"]) for row in rows)
         return examples[:limit]
 
+    def training_version(self) -> tuple[int, int]:
+        event_id = self.conn.execute(
+            "SELECT COALESCE(MAX(id), 0) FROM capture_events"
+        ).fetchone()[0]
+        correction_id = self.conn.execute(
+            "SELECT COALESCE(MAX(id), 0) FROM capture_corrections"
+        ).fetchone()[0]
+        return int(event_id), int(correction_id)
+
     def _structured_context(self, terms: list[str], limit: int) -> list[MemoryItem]:
         if not terms:
             return []
@@ -206,6 +220,7 @@ class CaptureMemory:
                 (query, limit),
             ).fetchall()
         except OperationalError:
+            logger.exception("Capture FTS query failed; falling back to no FTS context")
             return []
         return [
             MemoryItem(row["kind"], row["clean_text"], parse_day(row["day"]), row["context"], 0.7)
@@ -234,6 +249,7 @@ class CaptureMemory:
             self.conn.execute("SELECT rowid FROM capture_fts LIMIT 1")
             return True
         except OperationalError:
+            logger.info("Capture FTS is unavailable; using LIKE search fallback")
             return False
 
 

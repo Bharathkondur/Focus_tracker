@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
+import shutil
+import logging
+
+
+logger = logging.getLogger(__name__)
+SCHEMA_VERSION = 2
 
 
 SCHEMA = """
@@ -54,6 +61,12 @@ CREATE TABLE IF NOT EXISTS reflections (
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS schema_version (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    version INTEGER NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS capture_events (
@@ -176,10 +189,44 @@ class Database:
         self._conn.executescript(SCHEMA)
         self._ensure_column("daily_tasks", "planned_time", "TEXT NOT NULL DEFAULT ''")
         self._ensure_capture_search()
+        self._set_schema_version(SCHEMA_VERSION)
         self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()
+
+    def schema_version(self) -> int:
+        row = self._conn.execute(
+            "SELECT version FROM schema_version WHERE id = 1"
+        ).fetchone()
+        return int(row["version"]) if row else 0
+
+    def backup(self, backup_dir: Path | None = None) -> Path:
+        target_dir = backup_dir or self.path.parent / "backups"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        target = target_dir / f"{self.path.stem}-{stamp}.sqlite3"
+        target_conn = sqlite3.connect(target)
+        try:
+            self._conn.backup(target_conn)
+        finally:
+            target_conn.close()
+        return target
+
+    def export_sql(self, export_dir: Path | None = None) -> Path:
+        target_dir = export_dir or self.path.parent / "exports"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        target = target_dir / f"{self.path.stem}-{stamp}.sql"
+        target.write_text("\n".join(self._conn.iterdump()), encoding="utf-8")
+        return target
+
+    @staticmethod
+    def restore_backup(source: Path, destination: Path) -> None:
+        if not source.exists():
+            raise FileNotFoundError(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
 
     def _ensure_column(self, table: str, column: str, definition: str) -> None:
         columns = {
@@ -188,6 +235,18 @@ class Database:
         }
         if column not in columns:
             self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    def _set_schema_version(self, version: int) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO schema_version (id, version, updated_at)
+            VALUES (1, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+                version = excluded.version,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (version,),
+        )
 
     def _ensure_capture_search(self) -> None:
         try:
@@ -199,4 +258,5 @@ class Database:
             )
         except sqlite3.OperationalError:
             # Some Python builds omit FTS5. Capture memory still works with LIKE search.
+            logger.exception("SQLite FTS5 is unavailable; capture memory will use LIKE search")
             pass

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from momentum.core.dates import parse_day
 from momentum.data.paths import LEGACY_DAILY_JSON
 from momentum.data.repository import DONE, MISSED, Repository
+
+
+logger = logging.getLogger(__name__)
 
 
 def migrate_daily_json(repo: Repository, path: Path = LEGACY_DAILY_JSON) -> None:
@@ -16,6 +20,7 @@ def migrate_daily_json(repo: Repository, path: Path = LEGACY_DAILY_JSON) -> None
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
+        logger.exception("Failed to read legacy daily JSON from %s", path)
         return
     if not isinstance(raw, dict):
         return

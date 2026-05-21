@@ -246,6 +246,17 @@ class Repository:
     def day_scores(self, start: date, end: date) -> list[DayScore]:
         goals = self.all_goals()
         logs = {(log.goal_id, log.day): log for log in self.goal_logs(start, end)}
+        task_rows_by_day: dict[date, list[Row]] = {}
+        task_rows = self.conn.execute(
+            """
+            SELECT day, status FROM daily_tasks
+            WHERE day BETWEEN ? AND ? AND status != ?
+            ORDER BY day ASC
+            """,
+            (date_key(start), date_key(end), ARCHIVED),
+        ).fetchall()
+        for row in task_rows:
+            task_rows_by_day.setdefault(parse_day(row["day"]), []).append(row)
         reflections = {
             parse_day(row["day"]): row["is_vacation"]
             for row in self.conn.execute(
@@ -267,10 +278,7 @@ class Repository:
                     completed += 1
                 elif status and status.status == SKIPPED:
                     skipped += 1
-            task_rows = self.conn.execute(
-                "SELECT status FROM daily_tasks WHERE day = ? AND status != ?",
-                (date_key(day), ARCHIVED),
-            ).fetchall()
+            task_rows = task_rows_by_day.get(day, [])
             for row in task_rows:
                 if row["status"] == DONE:
                     completed += 1

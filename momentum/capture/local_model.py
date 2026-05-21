@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
+from threading import RLock, Thread
 
 from momentum.data.paths import BASE_DIR
 
 
 MODEL_DIR = BASE_DIR / "experiments" / "three_class" / "latest"
 KINDS = ("task", "goal", "note")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -30,70 +33,98 @@ class LocalIntentModel:
         self._config = None
         self._id_to_label: dict[int, str] = {}
         self._device = "cpu"
+        self._lock = RLock()
+        self._loading = False
 
     @property
     def status(self) -> str:
+        if self._loading and not self._loaded:
+            return "Local AI is loading in the background."
         if not self._loaded:
-            self._load()
+            self.warmup_async()
         return self._status
 
     @property
     def available(self) -> bool:
         if not self._loaded:
-            self._load()
+            self.warmup_async()
         return self._available
+
+    def warmup_async(self) -> None:
+        with self._lock:
+            if self._loaded or self._loading:
+                return
+            self._loading = True
+        Thread(target=self._load_in_background, name="MomentumLocalAIWarmup", daemon=True).start()
 
     def predict(self, text: str) -> ModelPrediction | None:
         if not text.strip():
             return None
         if not self._loaded:
-            self._load()
+            self.warmup_async()
+            return None
+        if self._loading:
+            return None
         if not self._available:
             return None
         try:
-            ids, mask = self._encode(text)
-            torch = self._torch
-            input_ids = torch.tensor([ids], dtype=torch.long, device=self._device)
-            attention_mask = torch.tensor([mask], dtype=torch.bool, device=self._device)
-            with torch.inference_mode():
-                probabilities = torch.softmax(self._model(input_ids, attention_mask), dim=-1)[0]
-            best_id = int(torch.argmax(probabilities).item())
-            scores = {
-                self._id_to_label[index]: round(float(probabilities[index].item()), 4)
-                for index in range(len(self._id_to_label))
-            }
+            with self._lock:
+                ids, mask = self._encode(text)
+                torch = self._torch
+                input_ids = torch.tensor([ids], dtype=torch.long, device=self._device)
+                attention_mask = torch.tensor([mask], dtype=torch.bool, device=self._device)
+                with torch.inference_mode():
+                    probabilities = torch.softmax(self._model(input_ids, attention_mask), dim=-1)[0]
+                best_id = int(torch.argmax(probabilities).item())
+                scores = {
+                    self._id_to_label[index]: round(float(probabilities[index].item()), 4)
+                    for index in range(len(self._id_to_label))
+                }
             best = self._id_to_label[best_id]
             return ModelPrediction(best, scores[best], scores, self._status)
         except Exception as exc:
             self._available = False
             self._status = f"Local AI disabled after prediction error: {exc}"
+            logger.exception("Local AI prediction failed")
             return None
 
-    def _load(self) -> None:
-        self._loaded = True
-        model_path = self.model_dir / "model.pt"
-        tokenizer_path = self.model_dir / "tokenizer.json"
-        if not model_path.exists() or not tokenizer_path.exists():
-            self._status = "Local AI checkpoint missing; using rules and memory."
-            return
+    def _load_in_background(self) -> None:
         try:
-            import torch
-            from tokenizers import Tokenizer
+            self._load()
+        finally:
+            with self._lock:
+                self._loading = False
 
-            self._torch = torch
-            checkpoint = torch.load(model_path, map_location="cpu")
-            self._config = _StudentConfig(**checkpoint["model_config"])
-            self._id_to_label = {int(key): value for key, value in checkpoint["id_to_label"].items()}
-            self._tokenizer = Tokenizer.from_file(str(tokenizer_path))
-            self._model = _BpeIntentEncoder(self._config, len(self._id_to_label))
-            self._model.load_state_dict(checkpoint["model_state"])
-            self._model.eval()
-            torch.set_num_threads(max(1, min(4, torch.get_num_threads())))
-            self._available = True
-            self._status = "Three-class local AI loaded."
-        except Exception as exc:
-            self._status = f"Local AI unavailable: {exc}"
-            self._available = False
+    def _load(self) -> None:
+        with self._lock:
+            if self._loaded:
+                return
+            self._loaded = True
+            model_path = self.model_dir / "model.pt"
+            tokenizer_path = self.model_dir / "tokenizer.json"
+            if not model_path.exists() or not tokenizer_path.exists():
+                self._status = "Local AI checkpoint missing; using rules and memory."
+                return
+            try:
+                import torch
+                from tokenizers import Tokenizer
+
+                self._torch = torch
+                checkpoint = torch.load(model_path, map_location="cpu")
+                self._config = _StudentConfig(**checkpoint["model_config"])
+                self._id_to_label = {int(key): value for key, value in checkpoint["id_to_label"].items()}
+                self._tokenizer = Tokenizer.from_file(str(tokenizer_path))
+                self._model = _BpeIntentEncoder(self._config, len(self._id_to_label))
+                self._model.load_state_dict(checkpoint["model_state"])
+                self._model.eval()
+                torch.set_num_threads(max(1, min(4, torch.get_num_threads())))
+                self._available = True
+                self._status = "Three-class local AI loaded."
+                logger.info("Local AI loaded from %s", self.model_dir)
+            except Exception as exc:
+                self._status = f"Local AI unavailable: {exc}"
+                self._available = False
+                logger.exception("Local AI failed to load from %s", self.model_dir)
 
     def _encode(self, text: str) -> tuple[list[int], list[int]]:
         encoded = self._tokenizer.encode(text)

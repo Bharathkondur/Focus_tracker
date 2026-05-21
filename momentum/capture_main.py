@@ -6,6 +6,7 @@ from datetime import timedelta
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
+from momentum.core.logging import configure_logging
 from momentum.core.dates import date_key, today
 from momentum.data.database import Database
 from momentum.data.legacy import migrate_daily_json
@@ -26,6 +27,7 @@ def carry_tasks_once(repo: Repository) -> None:
 
 def main() -> int:
     ensure_local_cwd()
+    configure_logging()
     app = QApplication(sys.argv)
     app.setApplicationName("Momentum Capture")
     if APP_ICON_PATH.exists():

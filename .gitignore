@@ -7,6 +7,12 @@ momentum.sqlite3*
 momentum_captures/
 models/
 training_data/
+logs/
+backups/
+exports/
+release/
+momentum_dashboard_ui_rebuild.jsx
+Screenshot *.png
 *.pt
 *.pth
 *.safetensors

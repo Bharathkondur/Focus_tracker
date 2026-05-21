@@ -40,9 +40,18 @@ class RoutedCapture:
 
 
 class ContextRouter:
-    def __init__(self, memory: CaptureMemory):
+    def __init__(
+        self,
+        memory: CaptureMemory,
+        local_model: LocalIntentModel | None = None,
+        preload_model: bool = True,
+    ):
         self.memory = memory
-        self.local_model = LocalIntentModel()
+        self.local_model = local_model or LocalIntentModel()
+        self._classifier: TinyIntentClassifier | None = None
+        self._classifier_version: tuple[int, int] | None = None
+        if preload_model:
+            self.local_model.warmup_async()
 
     @property
     def ai_status(self) -> str:
@@ -71,9 +80,7 @@ class ContextRouter:
         memory_kind, memory_confidence = self._memory_score(context)
         model_prediction = self.local_model.predict(intent.text)
         model_kind, model_confidence = self._model_score(model_prediction)
-        classifier_kind, classifier_confidence = TinyIntentClassifier(
-            self.memory.training_examples()
-        ).predict(intent.text)
+        classifier_kind, classifier_confidence = self._tiny_classifier().predict(intent.text)
 
         candidates = [
             (intent.kind, 0.58, "parser_default"),
@@ -122,6 +129,13 @@ class ContextRouter:
         # date/time rules, and repeated user memory to override edge cases.
         confidence = 0.62 + min(0.32, prediction.confidence * 0.32)
         return prediction.kind, round(confidence, 3)
+
+    def _tiny_classifier(self) -> TinyIntentClassifier:
+        version = self.memory.training_version()
+        if self._classifier is None or version != self._classifier_version:
+            self._classifier = TinyIntentClassifier(self.memory.training_examples())
+            self._classifier_version = version
+        return self._classifier
 
 
 def _words(value: str) -> list[str]:

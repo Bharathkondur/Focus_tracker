@@ -148,6 +148,31 @@ Optional ONNX export:
 py -3.11 experiments\three_class\export_onnx.py --checkpoint-dir experiments\three_class\latest --output experiments\three_class\latest\model.onnx --opset 18
 ```
 
+## Backup, Export, And Support
+
+Open the Reports tab in Momentum Capture to run local support actions:
+
+- Create Backup
+- Export Database
+- Support Bundle
+- Open Data Folder
+
+These write to ignored local folders: `backups/`, `exports/`, and `logs/`.
+
+## Package For Windows
+
+Create a local release zip with the executable, install/uninstall scripts, docs, and SHA-256 checksum:
+
+```powershell
+.\scripts\package_windows_release.ps1
+```
+
+To package the existing `MomentumCapture.exe` without rebuilding:
+
+```powershell
+.\scripts\package_windows_release.ps1 -SkipBuild
+```
+
 ## Data And Privacy
 
 Momentum stores app data locally. These files are ignored by Git:
@@ -173,3 +198,24 @@ Use `requirements.txt` for runtime dependencies.
 - Original Focus Tracker entry point: `momentum.main:main`
 - Training documentation: `training/README.md`
 - AI architecture notes: `AI_ARCHITECTURE.md`
+- Release-readiness gaps and next steps: `RELEASE_READINESS.md`
+
+Run the current test suite with:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+Install the local Git hook at `.git/hooks/post-commit` that pushes after every successful commit:
+
+```powershell
+.\scripts\install_git_hooks.ps1
+```
+
+To skip auto-push for one commit:
+
+```powershell
+$env:MOMENTUM_AUTO_PUSH = "0"
+git commit -m "local work in progress"
+Remove-Item Env:\MOMENTUM_AUTO_PUSH
+```
